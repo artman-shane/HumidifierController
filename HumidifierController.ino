@@ -2,14 +2,12 @@
 #include <Adafruit_Sensor.h>
 #include <Adafruit_BME280.h>
 #include <Adafruit_SSD1306.h>
-//#include "DHT.h"
 
-//#define DHTPIN D5     // Digital pin we're connected to
 #define FANCTRL D7    // Digital control for the fan relay
 #define DEHUMCTRL D6  // Digital control for the dehumidifier relay
-//#define DHTTYPE DHT11 // The type of DHT sensor - Mine is a DHT11
 
-#define SEA_LEVEL_PRESSURE 1095  // The pressure (1015) at your location in hpa - to calibrate the BME280 altimiter
+// The pressure (1015) is used to determine altitude. Use the vaule in Hpa of your area.
+#define SEA_LEVEL_PRESSURE 1095  
 
 // Instantiate a new instance of a BME280 sensor
 Adafruit_BME280 bme;
@@ -17,25 +15,20 @@ Adafruit_BME280 bme;
 // Instantiate a new instance of the LCD display (128x64)
 Adafruit_SSD1306 lcd(128, 64, &Wire, -1, 400000UL, 100000UL);
 
-// Instantiate a new instance of the DHT sensor (DHT11)
-//DHT dht(DHTPIN, DHTTYPE);
-
 float temperature, humidity, pressure, altitude;
-const String ver = "2.1";
+const String ver = "2.2";
 
 /*
-
  ******************************
    Humidity Settings
  ******************************
-
 */
 
 // Humidity Level to begin dehumidification
-const int onHumidity = 52;  //This is based on estimation that sensor is wrong. Should be around 55%
-
-// Humidity Level to stop dehumidification
-const int offHumidity = 45; //This is based on estimation that sensor is wrong. Should be around 50%
+// Found a problem when the BME280 was co-located with the ESP8266 NodeMCU.
+// The heat was causing +10deg and -15-20% Humidity. Needed to locate outside the case.
+const int onHumidity = 52;  
+const int offHumidity = 45;
 
 
 /*
@@ -68,8 +61,14 @@ bool extendRun = false;        // Extend Running
 
 String strMsg = ""; // Used for display writing
 
-int runCount = 0; // Number of times the system has cycled
-float runDuration = 0;
+unsigned int runCount = 0; // Number of times the system has cycled
+unsigned int runDuration = 0; // ms
+
+unsigned float runHours = 0; // hrs
+unsigned float runDays = 0; // days
+unsigned int dayCount = 0; // system runtime days
+unsigned int dayMillis = 0; // system runtime milliseconds counter to determine days.
+
 
 unsigned int initialPass = 1;
 
@@ -147,9 +146,9 @@ void loop() {
     Serial.print("Run Count: ");
     Serial.println(runCount);
     Serial.print("Hours running: ");
-    Serial.println(runDuration/3600000);
+    Serial.println(runDuration / 3600000);
     Serial.print("Last Reset: ");
-    Serial.print(millis()/3600000);
+    Serial.print(millis() / 3600000);
     Serial.println(" hours");
     Serial.print("P: ");
     Serial.print(p);
@@ -170,7 +169,7 @@ void loop() {
     lcd.print("V:");
     lcd.print(ver);
     lcd.print(" Rst: ");
-    lcd.print(millis()/3600000);
+    lcd.print(millis() / 3600000);
     lcd.println("hrs ago");
     lcd.print(" On:");
     lcd.print(onHumidity);
@@ -179,7 +178,7 @@ void loop() {
     lcd.print("RC: ");
     lcd.print(runCount);
     lcd.print(" RT: ");
-    lcd.println(runDuration/3600000); // In hours
+    lcd.println(runDuration / 3600000); // In hours
     lcd.print("P: ");
     lcd.print(p);
     lcd.print("  A: ");
@@ -248,9 +247,23 @@ void loop() {
       runDuration += (millis() - previousMillis);
       dehumidifyOn = false;
       Serial.print("The system has run for ");
-      Serial.print(runDuration/1000);
+      Serial.print(runDuration / 1000);
       Serial.println(" seconds");
     }
+
+// Work in progress for counting beyond 49days of runtime
+//      if (cMillis < previousMillis) {
+//        // The millis has rolled... (49 days)
+//        runDuration +=  4294967295 - previousMillis + cMillis;
+//        if (runDuration >= 86400000) {
+//          runDays++;
+//        }
+//        }
+//      } else {
+//        runDuration += (cMillis - previousMillis);
+//      }
+      
+
 
     /*
 
@@ -289,8 +302,31 @@ void loop() {
     lcd.display();
     delay(5000);
   }
+
+// Part of the run duration over 49days
+//    runtimeCounters(millis());
+
 }
 
 void toggleRelay(int _realy) {
   digitalWrite(_realy, !digitalRead(_realy));
+}
+
+unsigned int runtimeCounters(cMillis) {
+  /* Test for the start of application
+   * If the currentMillis - dayMillis is >= 86400000 then reset the day millis and increment the dayCount by one.
+   */ 
+  if (dayMillis > cMillis) {
+    temp = 4294967295 - dayMillis + cMillis;
+  } else {
+    if (cMillis - dayMillis >= 86400000) 
+    {
+      dayCount++;
+      if (dayMillis >= 86400000) {
+        dayMillis = 86400000;
+      } else {
+        dayMillis = cMillis - (cMillis - dayMillis - 86400000);
+      }
+    }
+  }
 }
